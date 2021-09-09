@@ -4,7 +4,6 @@
 #include "cache_policy.hpp"
 
 #include <cstddef>
-#include <functional>
 #include <limits>
 #include <memory>
 #include <mutex>
@@ -22,14 +21,8 @@ class fixed_sized_cache
     using const_iterator =
         typename std::unordered_map<Key, Value>::const_iterator;
     using operation_guard = typename std::lock_guard<std::mutex>;
-    using Callback =
-        typename std::function<void(const Key &key, const Value &value)>;
 
-    explicit fixed_sized_cache(
-        size_t max_size, const Policy &policy = Policy(),
-        Callback OnErase = [](const Key &, const Value &) {})
-        : cache_policy(policy), max_cache_size(max_size),
-          OnEraseCallback(OnErase)
+    explicit fixed_sized_cache(size_t max_size) : max_cache_size(max_size)
     {
         if (max_cache_size == 0)
         {
@@ -45,7 +38,7 @@ class fixed_sized_cache
     void Put(const Key &key, const Value &value)
     {
         operation_guard lock{safe_op};
-        auto elem_it = FindElem(key);
+        auto elem_it = FindForChange(key);
 
         if (elem_it == cache_items_map.end())
         {
@@ -61,8 +54,8 @@ class fixed_sized_cache
         }
         else
         {
-            // update previous value
-            Update(key, value);
+            cache_policy.Touch(key);
+            elem_it->second = value;
         }
     }
 
@@ -71,7 +64,7 @@ class fixed_sized_cache
         operation_guard lock{safe_op};
         auto elem_it = FindElem(key);
 
-        if (elem_it == cache_items_map.end())
+        if (elem_it == cache_items_map.cend())
         {
             throw std::range_error{"No such element in the cache"};
         }
@@ -89,7 +82,6 @@ class fixed_sized_cache
     size_t Size() const
     {
         operation_guard lock{safe_op};
-
         return cache_items_map.size();
     }
 
@@ -102,8 +94,7 @@ class fixed_sized_cache
      */
     bool Remove(const Key &key)
     {
-        operation_guard{safe_op};
-
+        operation_guard lock{safe_op};
         if (cache_items_map.find(key) == cache_items_map.cend())
         {
             return false;
@@ -118,23 +109,21 @@ class fixed_sized_cache
     void Clear()
     {
         operation_guard lock{safe_op};
-
         for (auto it = begin(); it != end(); ++it)
         {
             cache_policy.Erase(it->first);
-            OnEraseCallback(it->first, it->second);
         }
         cache_items_map.clear();
     }
 
     typename std::unordered_map<Key, Value>::const_iterator begin() const
     {
-        return cache_items_map.begin();
+        return cache_items_map.cbegin();
     }
 
     typename std::unordered_map<Key, Value>::const_iterator end() const
     {
-        return cache_items_map.end();
+        return cache_items_map.cend();
     }
 
   protected:
@@ -149,17 +138,15 @@ class fixed_sized_cache
         cache_policy.Erase(key);
 
         auto elem_it = FindElem(key);
-        OnEraseCallback(key, elem_it->second);
         cache_items_map.erase(elem_it);
     }
 
-    void Update(const Key &key, const Value &value)
+    const_iterator FindElem(const Key &key) const
     {
-        cache_policy.Touch(key);
-        cache_items_map[key] = value;
+        return cache_items_map.find(key);
     }
 
-    const_iterator FindElem(const Key &key) const
+    iterator FindForChange(const Key &key)
     {
         return cache_items_map.find(key);
     }
@@ -169,7 +156,6 @@ class fixed_sized_cache
     mutable Policy cache_policy;
     mutable std::mutex safe_op;
     size_t max_cache_size;
-    Callback OnEraseCallback;
 };
 } // namespace caches
 
