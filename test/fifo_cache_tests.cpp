@@ -28,6 +28,27 @@ TEST(FIFOCache, Simple_Test)
     EXPECT_EQ(fc.Get(3), 30);
 }
 
+TEST(FIFOCache, Find)
+{
+    fifo_cache_t<int, int> fc(2);
+
+    fc.Put(1, 10);
+
+    auto existing_value = fc.Find(1);
+    EXPECT_TRUE(existing_value);
+    EXPECT_EQ(*existing_value, 10);
+}
+
+TEST(FIFOCache, Find_For_Non_Existing_Value)
+{
+    fifo_cache_t<int, int> fc(2);
+
+    fc.Put(1, 10);
+
+    EXPECT_EQ(fc.Size(), 1);
+    EXPECT_FALSE(fc.Find(10));
+}
+
 TEST(FIFOCache, Missing_Value)
 {
     fifo_cache_t<int, int> fc(2);

@@ -8,6 +8,7 @@
 #include <memory>
 #include <mutex>
 #include <unordered_map>
+#include <optional>
 
 namespace caches
 {
@@ -71,6 +72,19 @@ class fixed_sized_cache
         cache_policy.Touch(key);
 
         return elem_it->second;
+    }
+
+    std::optional<Value> Find(const Key &key) const {
+        operation_guard lock{safe_op};
+        auto elem_it = FindElem(key);
+
+        if (elem_it == cache_items_map.cend()) {
+            return std::nullopt;
+        }
+
+        cache_policy.Touch(key);
+
+        return std::make_optional<Value>(elem_it->second);
     }
 
     bool Cached(const Key &key) const
