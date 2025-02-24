@@ -9,6 +9,7 @@
 #include <mutex>
 #include <unordered_map>
 #include <optional>
+#include <stdexcept>
 
 namespace caches
 {
